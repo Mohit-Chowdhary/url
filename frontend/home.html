@@ -6,23 +6,29 @@
         <lr>URL SHORTENER</lr>
     </head>
     <body>
-        <form id="urlInput">
-            <label for="urlInput">Enter URL:</label>
-            <input type="text" id ="urlInputText" name = "urlInput"><br><br>
+        <form id="url_input">
+            <label for="url_input_text">Enter URL:</label>
+            <input type="text" id ="url_input_text" name = "url_input"><br><br>
+
+            <label for="preference">Enter preference:</label>
+            <input type="text" id ="preference" name = "Preferred code:"><br><br>
             <input type="submit" id="submitButton" value="Submit">
         </form>
         <p id="result"></p><br>
         <p>Resultant hash:</p><br>
         <p id = "result"></p>
+        <p id = "code"></p>
+        <p id = "url"></p>
     </body>
 </html>
 
 <script>
-    const form = document.getElementById("urlInput");
+    const form = document.getElementById("url_input");
 
     form.addEventListener("submit", async function(event){
         event.preventDefault();
-        let url = document.getElementById("urlInputText").value;
+        const url = document.getElementById("url_input_text").value;
+        const preference = document.getElementById("preference").value;
         //console.log(url);
 
         const response  = await fetch("/submit",{
@@ -31,12 +37,15 @@
                 "Content-type": "application/json"
             },
             body:   JSON.stringify({
-                url: url
+                url: url,
+                preference: preference
             })
         });
 
         const data = await response.json();
 
-        document.getElementById("result").textContent = data.result;
+        document.getElementById("result").textContent = data.result || "";
+        document.getElementById("url").textContent = data.url || "";
+        document.getElementById("code").textContent = data.code || "";
     });
 </script>
