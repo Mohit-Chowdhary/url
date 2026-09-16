@@ -14,7 +14,7 @@
             <input type="text" id ="preference" name = "Preferred code:"><br><br>
             <input type="submit" id="submitButton" value="Submit">
         </form>
-        <p id="result"></p><br>
+        <p id="message"></p><br>
         <p>Resultant hash:</p><br>
         <p id = "result"></p>
         <p id = "code"></p>
@@ -44,7 +44,7 @@
 
         const data = await response.json();
 
-        document.getElementById("result").textContent = data.result || "";
+        document.getElementById("message").textContent = data.message || "";
         document.getElementById("url").textContent = data.url || "";
         document.getElementById("code").textContent = data.code || "";
     });

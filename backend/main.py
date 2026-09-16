@@ -40,6 +40,15 @@ def submit(url_input: URLInput ):
     if preference == "":
         preference = None
 
+    if preference is not None:
+        len_pref = len(preference)
+
+        if len_pref>10 or len_pref<3:
+            return {"message": "Custom code must be between 3 and 10 characters"}
+
+        if not preference.isalnum():
+            return {"message": "Custom code must have only A-Z,a-z and 0-9"}
+
     if not url.startswith(("http://","https://")):
         url = "https://"+url
 
@@ -52,7 +61,31 @@ def submit(url_input: URLInput ):
 
         if preference is not None:
             try:
-                result = db.execute(text("""
+                url_result = db.execute(text("""
+                    SELECT original_url 
+                    FROM urls 
+                    WHERE original_url=:url;
+                    """),
+                    {"url":url}
+                )
+
+                existing = url_result.fetchone()
+
+                if existing is not None:
+                    code_result = db.execute(text("""
+                        SELECT short_code
+                        FROM urls
+                        WHERE original_url=:url;
+                    """),
+                        {"url":url}
+                    )
+
+                    existing_code = code_result.fetchone()
+
+                    return {"message": f"This URL already has a shortcode '{existing_code[0]}'"}
+
+                
+                code_result = db.execute(text("""
                     SELECT original_url 
                     FROM urls 
                     WHERE short_code=:code;
@@ -60,7 +93,8 @@ def submit(url_input: URLInput ):
                     {"code":preference}
                 )
 
-                collision = result.fetchone()
+                collision = code_result.fetchone()
+
                 if collision is None:
                     result = db.execute(text("""INSERT INTO urls(original_url,short_code) 
                     VALUES(:url,:code); 
@@ -69,10 +103,10 @@ def submit(url_input: URLInput ):
                     )
                     db.commit()
                     return {"code": preference, "url":url}
-                elif collision[0] == url:
-                    return {"code": preference, "url":url}
+                #elif collision[0] == url:
+                    #return {"code": preference, "url":url}
                 else:
-                    return {"result": None, "message": "Retry preference, or leave blank"}
+                    return {"message": "Retry preference, or leave blank"}
             finally:
                 db.close()
 
