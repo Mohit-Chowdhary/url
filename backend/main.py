@@ -5,12 +5,16 @@ from urllib.request import urlopen
 from urllib.error import HTTPError, URLError
 from sqlalchemy import text
 
+from fastapi.staticfiles import StaticFiles
+
 import secrets
 import string
 
 from backend.db import SessionLocal
 
 app = FastAPI()
+
+app.mount("/frontend",StaticFiles(directory="frontend"),name="frontend")
 
 BASE62 = string.ascii_letters + string.digits
 
@@ -137,7 +141,7 @@ def submit(url_input: URLInput ):
             finally:
                 db.close()
     
-    return {"result":"Invalid URL"}
+    return {"message":"Invalid URL"}
 
 def generate_code(length=8):
     return "".join(secrets.choice(BASE62) for _ in range(length))

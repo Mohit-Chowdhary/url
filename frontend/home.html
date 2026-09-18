@@ -1,24 +1,28 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>
             URL Shortener
         </title>
-        <lr>URL SHORTENER</lr>
+        <link rel="stylesheet" href="frontend/style.css">
     </head>
     <body>
-        <form id="url_input">
-            <label for="url_input_text">Enter URL:</label>
-            <input type="text" id ="url_input_text" name = "url_input"><br><br>
+        <div class="container">
+            <lr>URL SHORTENER</lr>
+            <form id="url_input">
+                <label for="url_input_text">Enter URL:</label>
+                <input type="text" id ="url_input_text" name = "url_input"><br><br>
 
-            <label for="preference">Enter preference:</label>
-            <input type="text" id ="preference" name = "Preferred code:"><br><br>
-            <input type="submit" id="submitButton" value="Submit">
-        </form>
-        <p id="message"></p><br>
-        <p>Resultant hash:</p><br>
-        <p id = "result"></p>
-        <p id = "code"></p>
-        <p id = "url"></p>
+                <label for="preference">Enter preference:</label>
+                <input type="text" id ="preference" name = "Preferred code:"><br><br>
+                <input type="submit" id="submitButton" value="Submit">
+            </form>
+            <p id="message"></p><br>
+            <p>Resultant hash:</p><br>
+            <p id = "result"></p>
+            <p id = "code"></p>
+            <p id = "url"></p>
+        </div>
     </body>
 </html>
 

@@ -1,0 +1,35 @@
+#url_input{
+    color:rgb(25, 21, 0);
+    font-size: 40px;
+}
+#url_input_text{
+    color:rgb(0, 12, 74);
+    font-size: 44px;
+}
+#preference{
+    color:pink;
+    font-size: 44px;
+}
+#submitButton{
+    display: block;
+    margin: 20px auto;
+    width: 150px;
+    height: 45px;
+    color: rgb(0, 0, 0);
+    background: green;
+    border-radius: 5px;
+    padding: 12px 30px;
+    border: none;
+}
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: left;
+    align-items: left;
+}
+.container{
+    width:900px;
+    padding: 20px;
+    margin: auto;
+}
