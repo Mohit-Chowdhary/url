@@ -167,7 +167,11 @@ def metadata(code: str):
     if data is None:
         return {"message":"No link exists for this shortcode"}
     db.close()
-    return{"Original url": {data[2]},"Code": {data[1]}, "Created at": {data[3]}, "Last accessed": {data[4]}, "Click count": {data[5]}}
+    return{"Original url": data[2],
+           "Code": data[1], 
+           "Created at": data[3], 
+           "Last accessed": data[4], 
+           "Click count": data[5]}
 
 @app.get("/{code}")
 def redirect(code:str):
@@ -182,16 +186,11 @@ def redirect(code:str):
     if url is None:
         return {"message": "No link exists for this shortcode"}
 
-    db.execute(text("""UPDATE urls
-        SET click_count = click_count+1
-        WHERE short_code = :code;
-    """),{"code":code})
-
     now = datetime.now()
 
     result = db.execute(text("""
         UPDATE urls
-        SET last_clicked_at = :now
+        SET last_clicked_at = :now, click_count = click_count+1
         WHERE short_code = :code;
     """),{"code":code,"now":now})
     db.commit()
