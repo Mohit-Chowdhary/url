@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from urllib.request import urlopen
-from urllib.error import HTTPError, URLError
 from sqlalchemy import text
 
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+from fastapi import Request
+import re
 
 import secrets
 import string
@@ -37,7 +38,7 @@ def home():
     return FileResponse("frontend/home.html")
 
 @app.post("/submit")
-def submit(url_input: URLInput ):
+def submit(url_input: URLInput , request: Request):
     print("i got ",url_input.url)
     url = url_input.url
     preference = url_input.preference
@@ -86,7 +87,7 @@ def submit(url_input: URLInput ):
 
                     existing_code = code_result.fetchone()
 
-                    return {"message": f"This URL already has a shortcode '{existing_code[0]}'"}
+                    return {"message": f"This URL already has a shortcode ", "code" :existing_code[0], "url":str(request.base_url)+code}
 
                 
                 code_result = db.execute(text("""
@@ -103,7 +104,7 @@ def submit(url_input: URLInput ):
                     result = db.execute(text("""INSERT INTO urls(original_url,short_code) 
                     VALUES(:url,:code); 
                     """),
-                        {"url":url,"code":preference}
+                        {"url":str(request.base_url)+url,"code":preference}
                     )
                     db.commit()
                     return {"code": preference, "url":url}
@@ -121,7 +122,7 @@ def submit(url_input: URLInput ):
                 )
                 exists = result.fetchone()
                 if exists is not None:
-                    return {"code": exists[0], "url":url}
+                    return {"code": exists[0], "url":str(request.base_url)+code}
                 while(True):
                     code = generate_code(8)
 
@@ -137,7 +138,7 @@ def submit(url_input: URLInput ):
                     )
                     db.commit()
 
-                    return {"code": code, "url":url}
+                    return {"code": code, "url":str(request.base_url)+code}
             finally:
                 db.close()
     
@@ -147,18 +148,21 @@ def generate_code(length=8):
     return "".join(secrets.choice(BASE62) for _ in range(length))
 
 def isURLValid(url: str)->bool:
-    try:
-        response = urlopen(url, timeout = 5)
+    pattern  = r"https?://[^\s]+$"
+    return re.match(pattern, url) is not None
 
-        print("STATUS:", response.status)
 
-        return response.status<400
-    except HTTPError as e:
-        print("HTTP error",e)
-        return True
-    except URLError as e:
-        print("Error",e)
-        return False
-    except Exception as e:
-        print("Except",e)
-        return False
+@app.get("/{code}")
+def redirect(code:str):
+    db = SessionLocal()
+    data = db.execute(text("""SELECT original_url FROM urls
+        WHERE short_code = :code;
+    """),{"code":code}
+    )
+
+    url = data.fetchone()
+
+    if url is None:
+        return {"message": "No link exists for this shortcode"}
+
+    return RedirectResponse(url[0],status_code=302)
