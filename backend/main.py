@@ -13,6 +13,8 @@ import string
 
 from backend.db import SessionLocal
 
+from datetime import datetime
+
 app = FastAPI()
 
 app.mount("/frontend",StaticFiles(directory="frontend"),name="frontend")
@@ -122,7 +124,7 @@ def submit(url_input: URLInput , request: Request):
                 )
                 exists = result.fetchone()
                 if exists is not None:
-                    return {"code": exists[0], "url":str(request.base_url)+code}
+                    return {"code": exists[0], "url":str(request.base_url)+exists[0]}
                 while(True):
                     code = generate_code(8)
 
@@ -152,6 +154,21 @@ def isURLValid(url: str)->bool:
     return re.match(pattern, url) is not None
 
 
+@app.get("/{code}/meta")
+def metadata(code: str):
+    db = SessionLocal()
+    result = db.execute(text("""
+        SELECT * FROM urls
+        WHERE short_code = :code;
+    """),{"code":code})
+
+    data = result.fetchone()
+
+    if data is None:
+        return {"message":"No link exists for this shortcode"}
+    db.close()
+    return{"Original url": {data[2]},"Code": {data[1]}, "Created at": {data[3]}, "Last accessed": {data[4]}, "Click count": {data[5]}}
+
 @app.get("/{code}")
 def redirect(code:str):
     db = SessionLocal()
@@ -164,5 +181,20 @@ def redirect(code:str):
 
     if url is None:
         return {"message": "No link exists for this shortcode"}
+
+    db.execute(text("""UPDATE urls
+        SET click_count = click_count+1
+        WHERE short_code = :code;
+    """),{"code":code})
+
+    now = datetime.now()
+
+    result = db.execute(text("""
+        UPDATE urls
+        SET last_clicked_at = :now
+        WHERE short_code = :code;
+    """),{"code":code,"now":now})
+    db.commit()
+    db.close()
 
     return RedirectResponse(url[0],status_code=302)

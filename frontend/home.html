@@ -22,6 +22,7 @@
             <p id = "result"></p>
             <p id = "code"></p>
             <p id = "url"></p>
+            <button onclick="copyText()">Copy</button>
         </div>
     </body>
 </html>
@@ -52,4 +53,9 @@
         document.getElementById("url").textContent = data.url || "";
         document.getElementById("code").textContent = data.code || "";
     });
+
+    async function copyText(){
+        const text = document.getElementById("url").innerText;
+        await navigator.clipboard.writeText(text);
+    }
 </script>
