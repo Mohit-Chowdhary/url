@@ -21,6 +21,8 @@ app.mount("/frontend",StaticFiles(directory="frontend"),name="frontend")
 
 BASE62 = string.ascii_letters + string.digits
 
+invalidCodes = ('test-db','submit')
+
 class URLInput(BaseModel):
     url: str
     preference: str | None = None
@@ -54,7 +56,7 @@ def submit(url_input: URLInput , request: Request):
             return {"message": "Custom code must be between 3 and 10 characters"}
 
         if not preference.isalnum():
-            return {"message": "Custom code must have only A-Z,a-z and 0-9"}
+            return {"message": "Custom code must have only A-Z, a-z and 0-9"}
 
     if not url.startswith(("http://","https://")):
         url = "https://"+url
@@ -67,9 +69,11 @@ def submit(url_input: URLInput , request: Request):
         db = SessionLocal()
 
         if preference is not None:
+            if preference in invalidCodes:
+                return {"message": "Cannot use this code as it serves as an endpoint"}
             try:
                 url_result = db.execute(text("""
-                    SELECT original_url 
+                    SELECT original_url,short_code
                     FROM urls 
                     WHERE original_url=:url;
                     """),
@@ -79,19 +83,10 @@ def submit(url_input: URLInput , request: Request):
                 existing = url_result.fetchone()
 
                 if existing is not None:
-                    code_result = db.execute(text("""
-                        SELECT short_code
-                        FROM urls
-                        WHERE original_url=:url;
-                    """),
-                        {"url":url}
-                    )
+                    return {"message": f"This URL already has a shortcode", 
+                            "code" :existing[1], 
+                            "url":str(request.base_url)+existing[1]}
 
-                    existing_code = code_result.fetchone()
-
-                    return {"message": f"This URL already has a shortcode ", "code" :existing_code[0], "url":str(request.base_url)+code}
-
-                
                 code_result = db.execute(text("""
                     SELECT original_url 
                     FROM urls 
@@ -103,13 +98,14 @@ def submit(url_input: URLInput , request: Request):
                 collision = code_result.fetchone()
 
                 if collision is None:
-                    result = db.execute(text("""INSERT INTO urls(original_url,short_code) 
-                    VALUES(:url,:code); 
-                    """),
-                        {"url":str(request.base_url)+url,"code":preference}
-                    )
+                    db.execute(text("""
+                        INSERT INTO urls(short_code,original_url)
+                        VALUES(:preference,:url)
+                    """
+                    ),{"url":url,"preference":preference})
                     db.commit()
-                    return {"code": preference, "url":url}
+                    return {"code": preference, 
+                            "url":str(request.base_url)+preference}
                 #elif collision[0] == url:
                     #return {"code": preference, "url":url}
                 else:
