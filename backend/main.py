@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
@@ -12,6 +13,7 @@ import secrets
 import string
 
 from backend.db import SessionLocal
+from backend.models import URL
 
 from datetime import datetime
 
@@ -63,84 +65,81 @@ def submit(url_input: URLInput , request: Request):
 
     
 
-    if(isURLValid(url)):
-        print("Valid url: ",url)
+    if not isURLValid(url):
+        return {"message":"Invalid URL"}
 
-        db = SessionLocal()
+    db = SessionLocal()
+    try:
+        print("Valid url: ",url)
 
         if preference is not None:
             if preference in invalidCodes:
                 return {"message": "Cannot use this code as it serves as an endpoint"}
-            try:
-                url_result = db.execute(text("""
-                    SELECT original_url,short_code
-                    FROM urls 
-                    WHERE original_url=:url;
-                    """),
-                    {"url":url}
-                )
+            url_result = db.execute(text("""
+                SELECT original_url,short_code
+                FROM urls 
+                WHERE original_url=:url;
+                """),
+                {"url":url}
+            )
 
-                existing = url_result.fetchone()
+            existing = url_result.fetchone()
 
-                if existing is not None:
-                    return {"message": f"This URL already has a shortcode", 
-                            "code" :existing[1], 
-                            "url":str(request.base_url)+existing[1]}
+            if existing is not None:
+                return {"message": f"This URL already has a shortcode", 
+                        "code" :existing[1], 
+                        "url":str(request.base_url)+existing[1]}
 
-                code_result = db.execute(text("""
-                    SELECT original_url 
-                    FROM urls 
-                    WHERE short_code=:code;
-                    """),
-                    {"code":preference}
-                )
+            code_result = db.execute(text("""
+                SELECT original_url 
+                FROM urls 
+                WHERE short_code=:code;
+                """),
+                {"code":preference}
+            )
 
-                collision = code_result.fetchone()
+            collision = code_result.fetchone()
 
-                if collision is None:
-                    db.execute(text("""
-                        INSERT INTO urls(short_code,original_url)
-                        VALUES(:preference,:url)
-                    """
-                    ),{"url":url,"preference":preference})
-                    db.commit()
-                    return {"code": preference, 
-                            "url":str(request.base_url)+preference}
-                #elif collision[0] == url:
-                    #return {"code": preference, "url":url}
-                else:
-                    return {"message": "Retry preference, or leave blank"}
-            finally:
-                db.close()
+            if collision is None:
+                db.execute(text("""
+                    INSERT INTO urls(short_code,original_url)
+                    VALUES(:preference,:url)
+                """
+                ),{"url":url,"preference":preference})
+                db.commit()
+                return {"code": preference, 
+                        "url":str(request.base_url)+preference}
+            #elif collision[0] == url:
+                #return {"code": preference, "url":url}
+            else:
+                return {"message": "Retry preference, or leave blank"}
 
         else:
-            try:
-                result = db.execute(text("SELECT short_code FROM urls WHERE original_url = :url;"),
-                    {"url":url}
+            result = db.execute(text("SELECT short_code FROM urls WHERE original_url = :url;"),
+                {"url":url}
+            )
+            exists = result.fetchone()
+            if exists is not None:
+                return {"code": exists[0], "url":str(request.base_url)+exists[0]}
+            while(True):
+                code = generate_code(8)
+
+                collision =db.execute(text("SELECT original_url FROM urls WHERE short_code = :code;"),
+                    {"code": code}
+                ).fetchone()
+
+                if collision: continue
+
+                result = db.execute(text("""INSERT INTO urls(original_url,short_code)
+                VALUES(:url,:code)"""),
+                {"url": url, "code": code}
                 )
-                exists = result.fetchone()
-                if exists is not None:
-                    return {"code": exists[0], "url":str(request.base_url)+exists[0]}
-                while(True):
-                    code = generate_code(8)
+                db.commit()
 
-                    collision =db.execute(text("SELECT original_url FROM urls WHERE short_code = :code;"),
-                        {"code": code}
-                    ).fetchone()
+                return {"code": code, "url":str(request.base_url)+code}
 
-                    if collision: continue
-
-                    result = db.execute(text("""INSERT INTO urls(original_url,short_code)
-                    VALUES(:url,:code)"""),
-                    {"url": url, "code": code}
-                    )
-                    db.commit()
-
-                    return {"code": code, "url":str(request.base_url)+code}
-            finally:
-                db.close()
-    
-    return {"message":"Invalid URL"}
+    finally:
+        db.close()
 
 def generate_code(length=8):
     return "".join(secrets.choice(BASE62) for _ in range(length))
@@ -160,9 +159,9 @@ def metadata(code: str):
 
     data = result.fetchone()
 
+    db.close()
     if data is None:
         return {"message":"No link exists for this shortcode"}
-    db.close()
     return{"Original url": data[2],
            "Code": data[1], 
            "Created at": data[3], 
