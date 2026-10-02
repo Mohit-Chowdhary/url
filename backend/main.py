@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
@@ -75,37 +76,19 @@ def submit(url_input: URLInput , request: Request):
         if preference is not None:
             if preference in invalidCodes:
                 return {"message": "Cannot use this code as it serves as an endpoint"}
-            url_result = db.execute(text("""
-                SELECT original_url,short_code
-                FROM urls 
-                WHERE original_url=:url;
-                """),
-                {"url":url}
-            )
+            url_result = db.execute(select(URL).where(URL.original_url == url)).scalar_one_or_none()
 
-            existing = url_result.fetchone()
-
-            if existing is not None:
+            if url_result is not None:
+                existing = url_result.short_code
                 return {"message": f"This URL already has a shortcode", 
-                        "code" :existing[1], 
-                        "url":str(request.base_url)+existing[1]}
+                        "code" :existing, 
+                        "url":str(request.base_url)+existing}
 
-            code_result = db.execute(text("""
-                SELECT original_url 
-                FROM urls 
-                WHERE short_code=:code;
-                """),
-                {"code":preference}
-            )
+            code_result = db.execute(select(URL).where(URL.short_code == preference)).scalar_one_or_none()
 
-            collision = code_result.fetchone()
-
-            if collision is None:
-                db.execute(text("""
-                    INSERT INTO urls(short_code,original_url)
-                    VALUES(:preference,:url)
-                """
-                ),{"url":url,"preference":preference})
+            if code_result is None:
+                new_url = URL(short_code = preference, original_url = url)
+                db.add(new_url)
                 db.commit()
                 return {"code": preference, 
                         "url":str(request.base_url)+preference}
@@ -115,25 +98,18 @@ def submit(url_input: URLInput , request: Request):
                 return {"message": "Retry preference, or leave blank"}
 
         else:
-            result = db.execute(text("SELECT short_code FROM urls WHERE original_url = :url;"),
-                {"url":url}
-            )
-            exists = result.fetchone()
-            if exists is not None:
-                return {"code": exists[0], "url":str(request.base_url)+exists[0]}
+            result = db.execute(select(URL).where(URL.original_url == url)).scalar_one_or_none()
+            if result is not None:
+                return {"code": result.short_code, "url":str(request.base_url)+result.short_code}
             while(True):
                 code = generate_code(8)
 
-                collision =db.execute(text("SELECT original_url FROM urls WHERE short_code = :code;"),
-                    {"code": code}
-                ).fetchone()
+                collision = db.execute(select(URL).where(URL.short_code == preference)).scalar_one_or_none().original_url
 
                 if collision: continue
 
-                result = db.execute(text("""INSERT INTO urls(original_url,short_code)
-                VALUES(:url,:code)"""),
-                {"url": url, "code": code}
-                )
+                new_url = URL(original_url = url, short_code = preference)
+                db.insert(new_url)
                 db.commit()
 
                 return {"code": code, "url":str(request.base_url)+code}
@@ -152,42 +128,31 @@ def isURLValid(url: str)->bool:
 @app.get("/{code}/meta")
 def metadata(code: str):
     db = SessionLocal()
-    result = db.execute(text("""
-        SELECT * FROM urls
-        WHERE short_code = :code;
-    """),{"code":code})
-
-    data = result.fetchone()
+    data = db.execute(select(URL).where(URL.short_code == code)).scalar_one_or_none()
 
     db.close()
     if data is None:
         return {"message":"No link exists for this shortcode"}
-    return{"Original url": data[2],
-           "Code": data[1], 
-           "Created at": data[3], 
-           "Last accessed": data[4], 
-           "Click count": data[5]}
+    return{"Original url": data.original_url,
+           "Code": data.short_code, 
+           "Created at": data.created_at, 
+           "Last accessed": data.last_clicked_at, 
+           "Click count": data.click_count}
 
 @app.get("/{code}")
 def redirect(code:str):
     db = SessionLocal()
-    data = db.execute(text("""SELECT original_url FROM urls
-        WHERE short_code = :code;
-    """),{"code":code}
-    )
+    data = db.execute(select(URL).where(URL.short_code == code)).scalar_one_or_none()
 
-    url = data.fetchone()
-
-    if url is None:
+    if data is None:
         return {"message": "No link exists for this shortcode"}
+    
+    url = data.original_url
 
     now = datetime.now()
 
-    result = db.execute(text("""
-        UPDATE urls
-        SET last_clicked_at = :now, click_count = click_count+1
-        WHERE short_code = :code;
-    """),{"code":code,"now":now})
+    data.last_clicked_at = now
+    data.click_count += 1
     db.commit()
     db.close()
 
