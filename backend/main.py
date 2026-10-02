@@ -14,11 +14,14 @@ import secrets
 import string
 
 from backend.db import SessionLocal
-from backend.models import URL
+from backend.models import URL, Base
+from backend.db import engine
 
 from datetime import datetime
 
 app = FastAPI()
+
+Base.metadata.create_all(bind=engine)
 
 app.mount("/frontend",StaticFiles(directory="frontend"),name="frontend")
 
@@ -156,4 +159,4 @@ def redirect(code:str):
     db.commit()
     db.close()
 
-    return RedirectResponse(url[0],status_code=302)
+    return RedirectResponse(url,status_code=302)
